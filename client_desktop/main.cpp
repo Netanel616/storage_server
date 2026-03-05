@@ -9,30 +9,7 @@
 #include <limits>
 #include <algorithm> // for std::min
 #include "../shared/protocol.h"
-
-// Helper function to receive all bytes (C++ wrapper)
-bool recv_all(int sock, void* buffer, size_t len) {
-    size_t total_received = 0;
-    char* ptr = static_cast<char*>(buffer);
-    while (total_received < len) {
-        ssize_t bytes_in = recv(sock, ptr + total_received, len - total_received, 0);
-        if (bytes_in <= 0) return false;
-        total_received += bytes_in;
-    }
-    return true;
-}
-
-// Helper function to send all bytes (C++ wrapper)
-bool send_all(int sock, const void* buffer, size_t len) {
-    size_t total_sent = 0;
-    const char* ptr = static_cast<const char*>(buffer);
-    while (total_sent < len) {
-        ssize_t bytes_out = send(sock, ptr + total_sent, len - total_sent, 0);
-        if (bytes_out <= 0) return false;
-        total_sent += bytes_out;
-    }
-    return true;
-}
+#include "../shared/file_utils.h"
 
 class BackupClient {
 public:
@@ -116,47 +93,11 @@ private:
         std::cout << "Enter file path to upload: ";
         std::cin >> filepath;
 
-        std::ifstream file(filepath, std::ios::binary | std::ios::ate);
-        if (!file.is_open()) {
-            std::cerr << "Failed to open file: " << filepath << std::endl;
-            return;
+        if (send_file(sock_, filepath.c_str(), REQ_UPLOAD) == 0) {
+            std::cout << "File uploaded successfully." << std::endl;
+        } else {
+            std::cerr << "Failed to upload file." << std::endl;
         }
-
-        std::streamsize size = file.tellg();
-        file.seekg(0, std::ios::beg);
-
-        std::vector<char> buffer(size);
-        if (!file.read(buffer.data(), size)) {
-            std::cerr << "Failed to read file" << std::endl;
-            return;
-        }
-
-        // Extract filename from path
-        size_t last_slash = filepath.find_last_of("/\\");
-        std::string filename = (last_slash == std::string::npos) ? filepath : filepath.substr(last_slash + 1);
-        uint16_t name_len = static_cast<uint16_t>(filename.length());
-
-        FileHeader header;
-        header.type = REQ_UPLOAD;
-        header.data_size = htobe64(static_cast<uint64_t>(size));
-        header.name_size = htobe16(name_len);
-
-        if (!send_all(sock_, &header, sizeof(header))) {
-            std::cerr << "Failed to send header" << std::endl;
-            return;
-        }
-
-        if (!send_all(sock_, filename.c_str(), name_len)) {
-            std::cerr << "Failed to send filename" << std::endl;
-            return;
-        }
-
-        if (!send_all(sock_, buffer.data(), size)) {
-            std::cerr << "Failed to send file content" << std::endl;
-            return;
-        }
-
-        std::cout << "File uploaded successfully." << std::endl;
     }
 
     void handle_download() {
@@ -170,18 +111,18 @@ private:
         req.data_size = 0;
         req.name_size = htobe16(name_len);
 
-        if (!send_all(sock_, &req, sizeof(req))) {
+        if (send_all(sock_, &req, sizeof(req)) != 0) {
             std::cerr << "Failed to send download request" << std::endl;
             return;
         }
 
-        if (!send_all(sock_, filename.c_str(), name_len)) {
+        if (send_all(sock_, filename.c_str(), name_len) != 0) {
             std::cerr << "Failed to send filename" << std::endl;
             return;
         }
 
         FileHeader resp;
-        if (!recv_all(sock_, &resp, sizeof(resp))) {
+        if (recv_all(sock_, &resp, sizeof(resp)) != 0) {
             std::cerr << "Failed to receive download response" << std::endl;
             return;
         }
@@ -195,7 +136,7 @@ private:
         uint16_t resp_name_len = be16toh(resp.name_size);
 
         std::vector<char> name_buffer(resp_name_len + 1);
-        if (!recv_all(sock_, name_buffer.data(), resp_name_len)) {
+        if (recv_all(sock_, name_buffer.data(), resp_name_len) != 0) {
             std::cerr << "Failed to receive filename" << std::endl;
             return;
         }
@@ -236,13 +177,13 @@ private:
         req.data_size = 0;
         req.name_size = 0;
 
-        if (!send_all(sock_, &req, sizeof(req))) {
+        if (send_all(sock_, &req, sizeof(req)) != 0) {
             std::cerr << "Failed to send list request" << std::endl;
             return;
         }
 
         FileHeader resp;
-        if (!recv_all(sock_, &resp, sizeof(resp))) {
+        if (recv_all(sock_, &resp, sizeof(resp)) != 0) {
             std::cerr << "Failed to receive list response" << std::endl;
             return;
         }
@@ -254,7 +195,7 @@ private:
 
         uint64_t list_len = be64toh(resp.data_size);
         std::vector<char> list_buffer(list_len + 1);
-        if (!recv_all(sock_, list_buffer.data(), list_len)) {
+        if (recv_all(sock_, list_buffer.data(), list_len) != 0) {
             std::cerr << "Failed to receive file list" << std::endl;
             return;
         }

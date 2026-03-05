@@ -3,6 +3,10 @@
 
 #include "protocol.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * Ensures all requested bytes are sent to the socket.
  * @param sock The socket file descriptor.
@@ -33,5 +37,9 @@ int recv_all(int sock, void *buffer, size_t len);
  * @return 0 on success, -1 on failure.
  */
 int send_file(int sock, const char *filepath, uint8_t type);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // FILE_UTILS_H
