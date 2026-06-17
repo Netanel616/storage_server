@@ -28,6 +28,11 @@
 #define REQ_UPLOAD 1
 #define REQ_LIST_FILES 2
 #define REQ_DOWNLOAD 3
+#define REQ_DELETE 4
+
+// Error response types
+#define REQ_ERROR_NOT_FOUND 100
+#define REQ_ERROR_GENERIC   101
 
 #pragma pack(push, 1)
 typedef struct
